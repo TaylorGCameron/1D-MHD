@@ -1,0 +1,15 @@
+#!/bin/bash
+
+#echo "Hi there"
+#rm *.vtu
+#rm *.dat
+python outputACE_toCSV.py
+echo "Made csv, starting model"
+make -j 4
+mpirun -np 4 ./amrvac -i amrvac.par
+echo "Model finished, one way or another"
+echo "Processing model output"
+python process_AMRVAC_output.py
+rm *.dat
+rm *.vtu
+echo "The time series are in output.npy"

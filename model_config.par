@@ -1,0 +1,17 @@
+#Insert start date here
+interval_start = 2002, 11, 26, 20,0,0
+#Insert end time here
+interval_end = 2002, 11, 26, 23,30,59
+#Insert MVAB times if different from modelling times
+mvab0_interval_start = 2002, 11, 26, 19, 45, 06
+#Also here
+mvab0_interval_end = 2002, 11, 26, 23, 30, 59
+
+#Here go other options for the amrvac
+time_integrator=  'rk4'
+flux_scheme=    20*'hllc'
+limiter= 20*'minmod'
+courantpar=0.8d0
+
+
+#endfile
