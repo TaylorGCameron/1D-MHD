@@ -5,6 +5,7 @@
 #rm *.dat
 python outputACE_toCSV.py
 echo "Made csv, starting model"
+setup.pl -d=1
 make -j 4
 mpirun -np 4 ./amrvac -i amrvac.par
 echo "Model finished, one way or another"
