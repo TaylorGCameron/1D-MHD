@@ -726,6 +726,9 @@ def read_files(fpath):
         print('No data files :(')
         return 0,0,0
 
+    #sort names
+    files = np.sort(files)
+    
     all_cons = []
     all_prim = []
     all_times = []
@@ -769,6 +772,9 @@ def read_files_cons(fpath):
         print('No data files :(')
         return 0,0,0
 
+	#sort names
+    files = np.sort(files)
+		
     all_cons = []
     all_times = []
     
