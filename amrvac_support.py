@@ -20,13 +20,16 @@ import struct
 from ai import cdas
 
 
-#Goes through some text and finds the value associated with some keyword.
+#Goes through some text and finds the value associated with some keyword. 
+#keywords and values are separated by an = sign, so we have "keyword = value".
 def get_keyword(text, keyword):
     ind1 = text.find(keyword)
     ind2 = text[ind1:].find('\n') + ind1
     return text[ind1:ind2][text[ind1:ind2].find('=')+1:].replace(' ','')
 
-#modifies amrvac.par. values is a list of keywords and values to insert. Form is [[keyword, value],[keyword, value],...
+#modifies amrvac.par by adding and changing keyword/value pairs..
+#values is a list of keywords and values to insert. 
+#Form is [[keyword, value],[keyword, value],...
 def write_keywords(values):
     parfile = open('amrvac.par','r')
     par_text = parfile.read()
@@ -43,7 +46,8 @@ def write_keywords(values):
     parfile.write(par_text)
     parfile.close()
 
-
+#Pulls ACE data from CDAWeb and returns it in two dicts. One contains data from SWE, the other MFI.
+#Input is a time range, specified by two numbers, which are matplotlib dates.
 def pull_ACE(t1, t2):
     
     swe_data = cdas.get_data('sp_phys', 'AC_H0_SWE', mdate.num2date(t1), mdate.num2date(t2), ['Np', 'Vp', 'Tpr', 'V_GSE', 'SC_pos_GSE'])
@@ -51,7 +55,7 @@ def pull_ACE(t1, t2):
     mfi_data = cdas.get_data('sp_phys','AC_H3_MFI',mdate.num2date(t1), mdate.num2date(t2),['BGSEc'])
     
     return swe_data, mfi_data
-
+#Takes in SWE and MFI data, and averages the MFI data to be at the same cadence as the SWE data.
 def average_mfi(swe_data, mfi_data):
 
     Bx_resampled = np.zeros(len(swe_data['EPOCH']))
@@ -69,8 +73,8 @@ def average_mfi(swe_data, mfi_data):
     mfi_data['BZ_GSE'] = Bz_resampled
     return mfi_data
 
-#Function to combine ACE_MFI and ACE_SWE data. (MFI needs to be at the same time resolution as swe)
-
+#Function to combine ACE_MFI and ACE_SWE data into one structure.
+#(MFI needs to be at the same time resolution as swe)
 def combine_ACE(swe_data, mfi_data):
 
     if len(swe_data['EPOCH']) != len(mfi_data['EPOCH']):
@@ -93,7 +97,8 @@ def combine_ACE(swe_data, mfi_data):
     
     return ACE
 
-#Cleans up bad values. Flags them as NANS, and then fills them in
+#Cleans up bad values in ACE data. Flags them as NANS, and then fills them in
+#Input needs to be ACE data in form output by combine_ACE() 
 def clean_ACE(ACE):
     #Flag values as NANs    
     ACE['vx'][ACE['vx'] < -10**30] = np.nan
@@ -120,8 +125,8 @@ def clean_ACE(ACE):
     
     return ACE
         
-#Function used in rotating data
-
+#Pulls ACE Data from CDAWeb in a given time interval, computes and returns the normal as computed
+#using MVAB-0 for the interval.
 def getMVAB0Normal(t1, t2):
     swe_data, mfi_data = pull_ACE(t1, t2)
     mfi_data = average_mfi(swe_data, mfi_data)
@@ -173,7 +178,7 @@ def getMVAB0Normal(t1, t2):
 #    print 'r is ', ratio
     return n, ratio
 
-
+#Given combined ACE data, an angle and an axis, rotates all vector data (v, B, pos) about the given axis by the given angle.
 def rotate_ACE(ACE, angle, axis):
     
     for i in range(0, len(ACE['t'])):
@@ -200,18 +205,18 @@ def rotate_ACE(ACE, angle, axis):
         
         
     return ACE
-
+#Given two vectors, gives the axis of rotation between then (Just the cross product)
 def get_axis(v1, v2): 
     return np.cross(v1, v2)
-
+#Returns the magnitude of a vector.
 def mag(v):
      return np.sqrt(v.dot(v))
-
+#Given two vectors, returns the angle between them.
 def get_angle(v1, v2):
     return np.arccos((np.dot(v1, v2))/(mag(v1)*mag(v2)))
 
 
-
+#Given a vector, an angle and axis, rotates the vector about the axis by the angle.
 def rotate(v, angle, axis):
     axis = axis/mag(axis)
     
@@ -221,7 +226,7 @@ def rotate(v, angle, axis):
         
     return np.dot(R, v)
 
-#Pulls OMNI data, and puts it in a useful form
+#Pulls OMNI data for a given time range given in matplotlib date format, and puts it in a useful form
 def pull_OMNI_BSN(t1,t2):
     data = cdas.get_data('sp_phys', 'OMNI_HRO_1MIN', mdate.num2date(t1), mdate.num2date(t2), ['BSN_x','BSN_y','BSN_z'])
     dtype=np.dtype([('t', '<f8'), ('bsn_x_gse','<f8'),('bsn_y_gse','<f8'),('bsn_z_gse','<f8')])
@@ -236,14 +241,7 @@ def pull_OMNI_BSN(t1,t2):
 
 #Functions for loading 1d amrvac data
 
-
-
-
-
-#Fill in Nans with interpolated data
-    
-#This is where we interpolate over nans?
-
+#Given a series of values, finds NANS and fills them in by interpolating data around them
 def fill_nan(A):
     '''
     interpolate to fill nan values
@@ -257,6 +255,7 @@ def fill_nan(A):
     B = np.where(np.isfinite(A), A, f(inds))
     return B
 
+#Given a series of values and times, finds NANs and interpolates them using both the times and the values around the NANs
 def fill_nan_t(t, A):
     '''
     interpolate to fill nan values
@@ -269,307 +268,8 @@ def fill_nan_t(t, A):
     B = np.where(np.isfinite(A), A, f(t))
     return B
 
-#Functions for MVAB0 related stuff for paper
-    
-def getMVAB0ShiftedACE(ACE, WIND, t1,t2, parameter, interval = 60):
-    Re = 6371.
-    
-    n1 = np.where(ACE['t'] > t1)[0][0]
-    n2 = np.where(ACE['t'] < t2)[0][-1]
-    
-    #Make some variables
-    
-    normals = np.zeros([len(range(n1,n2)),3])
-    ratios = np.zeros([len(range(n1,n2))])
-    #print('HELLO')
-    for ind in range(n1,n2):
-        #Time intervals are about one minute. So, say an hour interval is 30 on either side
-        #print(ind-interval/2)
-        Bx = ACE['Bx'][ind-interval/2:ind+interval/2]
-        By = ACE['By'][ind-interval/2:ind+interval/2]
-        Bz = ACE['Bz'][ind-interval/2:ind+interval/2]
 
-        #calc your n
-        
-        B = np.transpose(np.array([Bx, By, Bz]))
-
-        M = np.zeros([3,3])
-        P = np.zeros([3,3])
-        
-        B_av = np.array([np.nanmean(B[:,0]), np.nanmean(B[:,1]),np.nanmean(B[:,2])])
-        e = B_av/ np.sqrt(B_av[0]**2+B_av[1]**2+B_av[2]**2)
-    
-        #Create a covariance matrix
-        
-        for i in range(3):
-            for j in range(3):
-                M[i,j] = np.nanmean(B[:,i]*B[:,j]) -np.nanmean(B[:,i])*np.nanmean(B[:,j])
-                if i == j:
-                    P[i,j] = 1 - (e[i]*e[j])
-                else:
-                    P[i,j] = -1* (e[i]*e[j])
-                        
-        #Get eigenvalues and eigenvectors
-        M = np.dot(np.dot(P,M),P)
-        eigenvalues, eigenvectors = LA.eig(M)
-        args = np.argsort(eigenvalues)
-        eigenvalues = eigenvalues[args]
-        eigenvectors = eigenvectors[:,args]
-        
-        #The vector corresponding to the middle (absolute value) eigenvalue is the minimum variance direction 
-        
-        front_normal = eigenvectors[:,1]
-        
-        #The x component of the vector should point towards the sun (positive)
-        if front_normal[0] < 0:
-            front_normal = -1*front_normal
-        
-        # Do a test. For the result to be valid, the second smallest eigenvalue should be x (5 for now) times larger than the smallest
-        
-        
-        ratio = eigenvalues[2] / eigenvalues[1]   
-    
-#        if ratio < 5:
-#            print 'MVAB0 ratio is ', ratio
-        normals[ind-n1] = front_normal
-        ratios[ind-n1] = ratio
-        
-    vx = ACE['vx'][n1:n2]
-    vy = ACE['vy'][n1:n2]
-    vz = ACE['vz'][n1:n2]
-                    
-    shift = np.zeros(len(vx))
-    dpos = np.nanmean(ACE['pos'][np.logical_and(ACE['t'] > t1,ACE['t'] < t2)], axis = 0) - (Re* np.nanmean(WIND['pos'][np.logical_and(WIND['t'] > t1,WIND['t'] < t2)], axis = 0))
-    for i in range(len(shift)):
-        shift[i] = np.dot(normals[i],dpos)/np.dot(normals[i], np.array([vx[i],vy[i],vz[i]]))/60./60./24.
-        
-    import copy
-    t_shifted = copy.deepcopy(ACE['t'][n1:n2])#Overkill? Probably
-    t_shifted = t_shifted - shift
-    
-    p =  ACE[parameter][np.logical_and(ACE['t'] > t1,ACE['t'] < t2)]
-    
-    p = p[np.argsort(t_shifted)]
-    t_shifted = np.sort(t_shifted)
-    
-    p = p[np.isfinite(t_shifted)]        
-    t_shifted = t_shifted[np.isfinite(t_shifted)]   
-    #print n
-    #print 'MVAB0', shift[0]*24
-    #print ''
-    return t_shifted, p
-#    return t_shifted, p
-
-
-def getMVAB0Lag(ACE, WIND, t1,t2, interval = 60):
-    Re = 6371.
-    
-    n1 = np.where(ACE['t'] > t1)[0][0]
-    n2 = np.where(ACE['t'] < t2)[0][-1]
-    
-    #Make some variables
-    
-    normals = np.zeros([len(range(n1,n2)),3])
-    ratios = np.zeros([len(range(n1,n2))])
-    
-    for ind in range(n1,n2):
-        #Time intervals are about one minute. So, say an hour interval is 30 on either side
-        Bx = ACE['Bx'][ind-interval/2:ind+interval/2]
-        By = ACE['By'][ind-interval/2:ind+interval/2]
-        Bz = ACE['Bz'][ind-interval/2:ind+interval/2]
-
-        #calc your n
-        
-        B = np.transpose(np.array([Bx, By, Bz]))
-
-        M = np.zeros([3,3])
-        P = np.zeros([3,3])
-        
-        B_av = np.array([np.nanmean(B[:,0]), np.nanmean(B[:,1]),np.nanmean(B[:,2])])
-        e = B_av/ np.sqrt(B_av[0]**2+B_av[1]**2+B_av[2]**2)
-    
-        #Create a covariance matrix
-        
-        for i in range(3):
-            for j in range(3):
-                M[i,j] = np.nanmean(B[:,i]*B[:,j]) -np.nanmean(B[:,i])*np.nanmean(B[:,j])
-                if i == j:
-                    P[i,j] = 1 - (e[i]*e[j])
-                else:
-                    P[i,j] = -1* (e[i]*e[j])
-                        
-        #Get eigenvalues and eigenvectors
-        M = np.dot(np.dot(P,M),P)
-        eigenvalues, eigenvectors = LA.eig(M)
-        args = np.argsort(eigenvalues)
-        eigenvalues = eigenvalues[args]
-        eigenvectors = eigenvectors[:,args]
-        
-        #The vector corresponding to the middle (absolute value) eigenvalue is the minimum variance direction 
-        
-        front_normal = eigenvectors[:,1]
-        
-        #The x component of the vector should point towards the sun (positive)
-        if front_normal[0] < 0:
-            front_normal = -1*front_normal
-        
-        # Do a test. For the result to be valid, the second smallest eigenvalue should be x (5 for now) times larger than the smallest
-        
-        
-        ratio = eigenvalues[2] / eigenvalues[1]   
-    
-#        if ratio < 5:
-#            print 'MVAB0 ratio is ', ratio
-        normals[ind-n1] = front_normal
-        ratios[ind-n1] = ratio
-        
-    vx = ACE['vx'][n1:n2]
-    vy = ACE['vy'][n1:n2]
-    vz = ACE['vz'][n1:n2]
-                    
-    shift = np.zeros(len(vx))
-    flatshift = np.zeros(len(vx))
-    dpos = np.nanmean(ACE['pos'][np.logical_and(ACE['t'] > t1,ACE['t'] < t2)], axis = 0) - (Re* np.nanmean(WIND['pos'][np.logical_and(WIND['t'] > t1,WIND['t'] < t2)], axis = 0))
-    
-    for i in range(len(shift)):
-        shift[i] = np.dot(normals[i],dpos)/np.dot(normals[i], np.array([vx[i],vy[i],vz[i]]))/60.
-    for i in range(len(shift)):
-        flatshift[i] = dpos[0]/vx[i]/60.
-
-    return shift - flatshift
-#    return t_shifted, p
-
-
-
-
-def getMVAB0NormalPoints(ACE, WIND, t1,t2, interval = 60):
-    Re = 6371.
-    
-    n1 = np.where(ACE['t'] > t1)[0][0]
-    n2 = np.where(ACE['t'] < t2)[0][-1]
-    
-    #Make some variables
-    
-    normals = np.zeros([len(range(n1,n2)),3])
-    ratios = np.zeros([len(range(n1,n2))])
-    
-    for ind in range(n1,n2):
-        #Time intervals are about one minute. So, say an hour interval is 30 on either side
-        Bx = ACE['Bx'][ind-interval/2:ind+interval/2]
-        By = ACE['By'][ind-interval/2:ind+interval/2]
-        Bz = ACE['Bz'][ind-interval/2:ind+interval/2]
-
-        #calc your n
-        
-        B = np.transpose(np.array([Bx, By, Bz]))
-
-        M = np.zeros([3,3])
-        P = np.zeros([3,3])
-        
-        B_av = np.array([np.nanmean(B[:,0]), np.nanmean(B[:,1]),np.nanmean(B[:,2])])
-        e = B_av/ np.sqrt(B_av[0]**2+B_av[1]**2+B_av[2]**2)
-    
-        #Create a covariance matrix
-        
-        for i in range(3):
-            for j in range(3):
-                M[i,j] = np.nanmean(B[:,i]*B[:,j]) -np.nanmean(B[:,i])*np.nanmean(B[:,j])
-                if i == j:
-                    P[i,j] = 1 - (e[i]*e[j])
-                else:
-                    P[i,j] = -1* (e[i]*e[j])
-                        
-        #Get eigenvalues and eigenvectors
-        M = np.dot(np.dot(P,M),P)
-        eigenvalues, eigenvectors = LA.eig(M)
-        args = np.argsort(eigenvalues)
-        eigenvalues = eigenvalues[args]
-        eigenvectors = eigenvectors[:,args]
-        
-        #The vector corresponding to the middle (absolute value) eigenvalue is the minimum variance direction 
-        
-        front_normal = eigenvectors[:,1]
-        
-        #The x component of the vector should point towards the sun (positive)
-        if front_normal[0] < 0:
-            front_normal = -1*front_normal
-        
-        # Do a test. For the result to be valid, the second smallest eigenvalue should be x (5 for now) times larger than the smallest
-        
-        
-        ratio = eigenvalues[2] / eigenvalues[1]   
-    
-#        if ratio < 5:
-#            print 'MVAB0 ratio is ', ratio
-        normals[ind-n1] = front_normal
-        ratios[ind-n1] = ratio
-        
-    return normals, ratios
-
-
-def getMVAB0NormalPointsWIND(WIND_B, t1,t2, interval = 60):
-    Re = 6371.
-    
-    n1 = np.where(WIND_B['t'] > t1)[0][0]
-    n2 = np.where(WIND_B['t'] < t2)[0][-1]
-    
-    #Make some variables
-    
-    normals = np.zeros([len(range(n1,n2)),3])
-    ratios = np.zeros([len(range(n1,n2))])
-    
-    for ind in range(n1,n2):
-        #Time intervals are about one minute. So, say an hour interval is 30 on either side
-        Bx = WIND_B['BGSE'][ind-interval/2:ind+interval/2,0]
-        By = WIND_B['BGSE'][ind-interval/2:ind+interval/2,1]
-        Bz = WIND_B['BGSE'][ind-interval/2:ind+interval/2,2]
-
-        #calc your n
-        
-        B = np.transpose(np.array([Bx, By, Bz]))
-
-        M = np.zeros([3,3])
-        P = np.zeros([3,3])
-        
-        B_av = np.array([np.nanmean(B[:,0]), np.nanmean(B[:,1]),np.nanmean(B[:,2])])
-        e = B_av/ np.sqrt(B_av[0]**2+B_av[1]**2+B_av[2]**2)
-    
-        #Create a covariance matrix
-        
-        for i in range(3):
-            for j in range(3):
-                M[i,j] = np.nanmean(B[:,i]*B[:,j]) -np.nanmean(B[:,i])*np.nanmean(B[:,j])
-                if i == j:
-                    P[i,j] = 1 - (e[i]*e[j])
-                else:
-                    P[i,j] = -1* (e[i]*e[j])
-                        
-        #Get eigenvalues and eigenvectors
-        M = np.dot(np.dot(P,M),P)
-        eigenvalues, eigenvectors = LA.eig(M)
-        args = np.argsort(eigenvalues)
-        eigenvalues = eigenvalues[args]
-        eigenvectors = eigenvectors[:,args]
-        
-        #The vector corresponding to the middle (absolute value) eigenvalue is the minimum variance direction 
-        
-        front_normal = eigenvectors[:,1]
-        
-        #The x component of the vector should point towards the sun (positive)
-        if front_normal[0] < 0:
-            front_normal = -1*front_normal
-        
-        # Do a test. For the result to be valid, the second smallest eigenvalue should be x (5 for now) times larger than the smallest
-        
-        
-        ratio = eigenvalues[2] / eigenvalues[1]   
-    
-#        if ratio < 5:
-#            print 'MVAB0 ratio is ', ratio
-        normals[ind-n1] = front_normal
-        ratios[ind-n1] = ratio
-        
-    return normals, ratios
+#The following is code meant to read in data files output by AMRVAC.
 
 # Size of basic types (in bytes)
 size_logical = 4
@@ -711,7 +411,9 @@ def get_primitive_data(cc, wnames, h):
         pass
 
     return [pp, prim_names]
-
+	
+	
+#Given a folder containing AMRVAC data files, returns a structure containing the data. 
 def read_files(fpath):
 
     import os
@@ -757,7 +459,7 @@ def read_files(fpath):
     
     return all_times, prim_names,all_prim
 
-
+#Given a folder containing AMRVAC data files, returns the contained data in conservative form.
 def read_files_cons(fpath):
 
     import os
