@@ -52,7 +52,7 @@ def pull_ACE(t1, t2):
     
     swe_data = cdas.get_data('sp_phys', 'AC_H0_SWE', mdate.num2date(t1), mdate.num2date(t2), ['Np', 'Vp', 'Tpr', 'V_GSE', 'SC_pos_GSE'])
 
-    mfi_data = cdas.get_data('sp_phys','AC_H3_MFI',mdate.num2date(t1), mdate.num2date(t2),['BGSEc'])
+    mfi_data = cdas.get_data('sp_phys','AC_H0_MFI',mdate.num2date(t1), mdate.num2date(t2),['BGSEc'])
     
     return swe_data, mfi_data
 #Takes in SWE and MFI data, and averages the MFI data to be at the same cadence as the SWE data.
